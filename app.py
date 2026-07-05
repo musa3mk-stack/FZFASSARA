@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,7 +9,6 @@ import requests
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'fz_fassara_secret_key_12345'
 
-# Dauko DATABASE_URL na Render, idan babu amfani da SQLite na gida
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -96,7 +95,7 @@ def login_password():
             login_user(user)
             return redirect(url_for('dashboard'))
         else:
-            flash('Kuskure a Imel ko Password!')
+            flash('Invalid email or password!')
     return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -109,14 +108,14 @@ def register():
 
         user_exists = User.query.filter((User.email == email) | (User.username == username)).first()
         if user_exists:
-            flash('Wannan sunan ko Imel din riga an yi amfani da shi!')
+            flash('Username or email already exists!')
             return redirect(request.url)
 
         hashed_pw = generate_password_hash(password, method='scrypt')
         new_user = User(username=username, email=email, password=hashed_pw)
         db.session.add(new_user)
         db.session.commit()
-        flash('An kirkiiri account lafiya! Shiga yanzu.')
+        flash('Account created successfully! Please log in.')
         return redirect(url_for('login_password'))
     
     try:
@@ -127,7 +126,7 @@ def register():
 @app.route('/google-login')
 def google_login():
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        flash('Ba a saita Google Login ba tukuna a Render Envs!')
+        flash('Google Login keys are not configured in Render Environment Variables!')
         return redirect(url_for('login_password'))
     try:
         google_provider_cfg = requests.get("https://accounts.google.com/.well-known/openid-configuration").json()
@@ -175,7 +174,6 @@ def google_callback():
             login_user(user)
             return redirect(url_for('dashboard'))
         
-        # GYARA 1: Kara sako idan imel din Google ba shi da kariya
         flash('Google account email not verified!')
         return redirect(url_for('login_password'))
     except Exception as e:
@@ -203,10 +201,10 @@ def upload():
         thumb_file = request.files.get('thumbnail')
 
         if not video_file or video_file.filename == '':
-            flash('Da fatan za a zaɓi fayil ɗin bidiyo!')
+            flash('Please select a video file!')
             return redirect(request.url)
         if not title:
-            flash('Dole ne ka saka wa bidiyo suna!')
+            flash('Title is required!')
             return redirect(request.url)
 
         v_filename = secure_filename(video_file.filename)
@@ -220,7 +218,7 @@ def upload():
         new_video = Video(title=title, description=description, category=category, filename=v_filename, thumbnail=t_filename, user_id=current_user.id)
         db.session.add(new_video)
         db.session.commit()
-        flash('An dora bidiyo lafiya!')
+        flash('Video uploaded successfully!')
         return redirect(url_for('dashboard'))
     return render_template('upload_2.html')
 
@@ -242,7 +240,6 @@ def watch_video(video_id):
     likes_count = Like.query.filter_by(video_id=video.id).count()
     return render_template('video_2.html', video=video, recommended=recommended, has_liked=has_liked, likes=likes_count)
 
-# GYARA 2: Dawo da duka sauran kofofin (Routes) domin gudun 404 a HTML
 @app.route('/like/<int:video_id>')
 @login_required
 def like_video(video_id):
@@ -263,7 +260,7 @@ def add_to_watchlist(video_id):
         new_item = Watchlist(user_id=current_user.id, video_id=video_id)
         db.session.add(new_item)
         db.session.commit()
-        flash('An kara a jerin abubuwan kallo!')
+        flash('Added to watchlist!')
     return redirect(url_for('dashboard'))
 
 @app.route('/profile', methods=['POST'])
@@ -278,14 +275,14 @@ def update_profile():
         profile_pic.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         current_user.profile_pic = filename
     db.session.commit()
-    flash('An sabunta bayanan fuska!')
+    flash('Profile updated successfully!')
     return redirect(url_for('dashboard', tab='profile'))
 
 @app.route('/admin')
 @login_required
 def admin_panel():
     if not current_user.is_admin:
-        flash('Baka da ikon shiga nan!')
+        flash('Access denied!')
         return redirect(url_for('dashboard'))
     users = User.query.all()
     videos = Video.query.all()
