@@ -30,11 +30,11 @@ else:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Maximum 200MB file processing safety threshold
-app.config['MAX_CONTENT_LENGTH'] = 200 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
 app.config['UPLOAD_VIDEO_DIR'] = os.path.join(project_root, 'uploads')
 app.config['UPLOAD_THUMB_DIR'] = os.path.join(project_root, 'thumbnails')
 
-# Google OAuth Credentials Configuration
+# Google OAuth Credentials Configuration (Direct Fallback Matrix)
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '://googleusercontent.com')
 REDIRECT_URI = "https://onrender.com"
 
@@ -56,6 +56,7 @@ subscribers = db.Table('subscribers',
     db.Column('channel_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('subscriber_id', db.Integer, db.ForeignKey('users.id'), primary_key=True)
 )
+
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -145,84 +146,7 @@ class Notification(db.Model):
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
-# Injection script for automated browser notification client runtime prompts
-@app.context_processor
-def inject_permissions_script():
-    script = """
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        if ("Notification" in window) {
-            if (Notification.permission!== "granted" && Notification.permission!== "denied") {
-                Notification.requestPermission().then(permission => {
-                    if (permission === "granted") {
-                        console.log("Notification access authorized successfully.");
-                    }
-                });
-            }
-        }
-    });
-    </script>
-    """
-    return dict(notifications_script=script)
 
-# =========================================================================
-# CORE CONTROLLER OPERATIONS ENGINE (FIXED & EXPANDED ROUTING LAYER)
-# =========================================================================
-
-@app.route('/')
-def welcome():
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    return render_template('welcome.html')
-
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    tab = request.args.get('tab', 'home')
-    search_query = request.args.get('search', '')
-    category_query = request.args.get('category', 'All')
-
-    videos_query = Video.query
-
-    if tab == 'shorts':
-        videos_query = videos_query.filter_by(is_short=True)
-    elif tab == 'premium':
-        videos_query = videos_query.filter_by(is_locked=True)
-    else:
-        videos_query = videos_query.filter_by(is_short=False, is_locked=False)
-
-    if search_query:
-        videos_query = videos_query.filter(Video.title.contains(search_query))
-
-    if category_query and category_query!= 'All':
-        videos_query = videos_query.filter_by(category=category_query)
-
-    all_videos = videos_query.order_by(Video.id.desc()).all()
-    watchlist_items = WatchLater.query.filter_by(user_id=current_user.id).all()
-
-    return render_template('dashboard.html', videos=all_videos, active_tab=tab, watchlist_items=watchlist_items)
-
-@app.route('/privacy')
-def privacy_policy():
-    return render_template('privacy.html')
-
-@app.route('/terms')
-def terms_of_service():
-    return render_template('terms.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login_password():
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        user = User.query.filter_by(email=email).first()
-        if user and check_password_hash(user.password_hash, password):
-            login_user(user)
-            return redirect(url_for('dashboard'))
-        flash('Incorrect email or password!', 'danger')
-    return render_template('login.html')
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
@@ -251,7 +175,7 @@ def google_login():
         'GET', authorization_endpoint,
         params={
             "client_id": GOOGLE_CLIENT_ID,
-            "redirect_uri": "https://fzfassara.onrender.com/login/google/callback",
+            "redirect_uri": "https://onrender.com",
             "scope": "openid email profile",
             "response_type": "code",
         }
@@ -270,7 +194,7 @@ def google_callback():
             "code": code,
             "client_id": GOOGLE_CLIENT_ID,
             "client_secret": os.environ.get('GOOGLE_CLIENT_SECRET', ''),
-            "redirect_uri": "https://fzfassara.onrender.com/login/google/callback",
+            "redirect_uri": "https://onrender.com",
             "grant_type": "authorization_code"
         }
     ).json()
