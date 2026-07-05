@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FZ Fassara - Matrix Hub</title>
+    <style>
+        /* Premium Enterprise Offline Styling Engine */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background-color: #141414; 
+            color: #ffffff; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            padding-bottom: 90px; 
+            overflow-x: hidden;
+        }
+        .header-bar {
+            background-color: #000000;
+            padding: 15px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 2px solid #222222;
+        }
+        .search-form { width: 100%; margin-bottom: 15px; }
+        .search-container { position: relative; width: 100%; }
+        .search-input {
+            width: 100%;
+            padding: 16px 20px;
+            background-color: #262626;
+            color: #ffffff;
+            border: 2px solid transparent;
+            border-radius: 12px;
+            font-size: 1.05rem;
+            outline: none;
+        }
+        .search-input:focus { border-color: #e50914; background-color: #1f1f1f; }
+        .search-btn {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: #e50914;
+            font-weight: bold;
+            font-size: 1.05rem;
+            cursor: pointer;
+        }
+        .category-slider {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding: 5px 0;
+            scrollbar-width: none;
+        }
+        .category-slider::-webkit-scrollbar { display: none; }
+        .category-tag {
+            background-color: #262626;
+            color: #ffffff;
+            padding: 10px 22px;
+            border-radius: 20px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .category-tag.active { background-color: #e50914; }
+        .main-content { padding: 20px; }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-left: 5px solid #e50914;
+            padding-left: 10px;
+        }
+        .section-title { font-size: 1.3rem; font-weight: 900; }
+        .btn-upload {
+            background-color: #e50914;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1rem;
+            display: inline-block;
+        }
+        .movie-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 20px;
+        }
+        .movie-tile {
+            background-color: #1f1f1f;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #2d2d2d;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .thumb-container {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%; 
+            background-color: #000000;
+        }
+        .thumb-img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .badge-tag {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(229, 9, 20, 0.95);
+            color: white;
+            font-size: 0.75rem;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .tile-body { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .movie-title { font-size: 1.15rem; font-weight: bold; color: white; margin-bottom: 6px; }
+        .movie-meta { display: flex; justify-content: space-between; color: #aaaaaa; font-size: 0.85rem; margin-bottom: 15px; }
+        .btn-watch {
+            display: block;
+            width: 100%;
+            background-color: transparent;
+            color: #ffffff;
+            border: 2px solid #e50914;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        .btn-watch:active { background-color: #e50914; }
+        .profile-card { background-color: #1f1f1f; border-radius: 12px; border: 2px solid #2d2d2d; padding: 25px; text-align: center; max-width: 500px; margin: 20px auto; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+        .avatar-large { width: 100px; height: 100px; background-color: #333; border-radius: 50%; margin: 0 auto 15px auto; border: 3px solid #e50914; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: bold; color: #888888; }
+        .profile-name { font-size: 1.5rem; font-weight: bold; text-transform: capitalize; margin-bottom: 5px; }
+        .profile-email { color: #888888; font-size: 0.95rem; margin-bottom: 15px; }
+        .profile-bio { background-color: #141414; padding: 15px; border-radius: 8px; font-size: 0.95rem; color: #cccccc; line-height: 1.4; margin-bottom: 25px; border: 1px solid #252525; }
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #0c0000;
+            border-top: 2px solid #222222;
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 5px;
+            z-index: 500;
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: #888888;
+            font-size: 0.85rem;
+            font-weight: bold;
+            width: 20%;
+            cursor: pointer;
+            padding-top: 5px;
+        }
+        .nav-item.active { color: #ffffff; }
+        .nav-text { font-size: 0.95rem; margin-bottom: 2px; display: block; }
+        .nav-item.active .nav-text { color: #e50914; }
+        .alert-box { background-color: #1f1f1f; border: 1px solid #444; border-left: 5px solid #e50914; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; }
+        .empty-state { text-align: center; padding: 60px 20px; grid-column: 1 / -1; color: #666; width: 100%; }
+        .list-row { background-color: #1f1f1f; border: 2px solid #2d2d2d; padding: 15px; border-radius: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. Top Sticky Interactive Header Platform -->
+    {% if active_tab in ['home', 'shorts', 'premium'] or not active_tab %}
+    <div class="header-bar">
+        <form class="search-form" method="GET" action="{{ url_for('dashboard') }}">
+            <div class="search-container">
+                <input type="text" name="search" class="search-input" placeholder="Search movies, uploader..." autocomplete="off" value="{{ request.args.get('search', '') }}">
+                <button type="submit" class="search-btn">Search</button>
+            </div>
+        </form>
+        
+        <div class="category-slider">
+            <a href="{{ url_for('dashboard', category='All') }}" class="category-tag active">All</a>
+            <a href="{{ url_for('dashboard', category='Movies') }}" class="category-tag">Movies</a>
+            <a href="{{ url_for('dashboard', category='News') }}" class="category-tag">News</a>
+            <a href="{{ url_for('dashboard', category='Music') }}" class="category-tag">Music</a>
+            <a href="{{ url_for('dashboard', category='Sports') }}" class="category-tag">Sports</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="main-content">
+        <!-- Display Flash Notification Alerts locally -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert-box">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- TAB A: ALL PUBLICATIONS (HOME) DISPLAY SCREEN -->
+        {% if active_tab == 'home' or not active_tab %}
+        <div class="section-header">
+            <h2 class="section-title">All Publications</h2>
+            {% if current_user.is_admin %}
+                <a href="{{ url_for('upload') }}" class="btn-upload">+ Upload</a>
+            {% endif %}
+        </div>
+        <div class="movie-grid">
+            {% for video in videos %}
+                <div class="movie-tile">
+                    <div class="thumb-container">
+                        <img src="/thumbnails/{{ video.thumbnail }}" class="thumb-img" alt="Cover">
+                        {% if video.is_locked %}
+                            <span class="badge-tag">Premium</span>
+                        {% elif video.is_short %}
+                            <span class="badge-tag" style="background-color: #00bcd4;">Short</span>
+                        {% endif %}
+                    </div>
+                    <div class="tile-body">
+                        <div>
+                            <h3 class="movie-title">{{ video.title }}</h3>
+                            <div class="movie-meta">
+                                <span>👁 {{ video.views }} views</span>
+                                <span>📂 {{ video.category }}</span>
+                            </div>
+                        </div>
+                        <a href="{{ url_for('watch_video', video_id=video.id) }}" class="btn-watch">Watch Now</a>
+                    </div>
+                </div>
+            {% else %}
+                <div class="empty-state"><h3>No videos available at the moment.</h3></div>
+            {% endfor %}
+        </div>
+
+        <!-- TAB B: SHORTSTV DISPLAY SCREEN -->
+        {% elif active_tab == 'shorts' %}
+        <div class="section-header">
+            <h2 class="section-title">ShortsTV</h2>
+            {% if current_user.is_admin %}
+                <a href="{{ url_for('upload') }}" class="btn-upload">Upload Short</a>
+            {% endif %}
+        </div>
+        <div class="movie-grid">
+            {% for video in videos %}
+                <div class="movie-tile">
+                    <div class="thumb-container">
+                        <span class="badge-tag" style="background-color: #00bcd4;">Short</span>
+                        <img src="/thumbnails/{{ video.thumbnail }}" class="thumb-img" alt="Cover">
+                    </div>
+                    <div class="tile-body">
+                        <h3 class="movie-title">{{ video.title }}</h3>
+                        <a href="{{ url_for('watch_video', video_id=video.id) }}" class="btn-watch">Play Short</a>
+                    </div>
+                </div>
+            {% else %}
+                <div class="empty-state"><h3>No short videos available. Click upload above to add one.</h3></div>
+            {% endfor %}
+        </div>
+        <!-- TAB C: PREMIUM MONETIZATION SCREEN -->
+        {% elif active_tab == 'premium' %}
+        <div class="section-header">
+            <h2 class="section-title">Premium Exclusive</h2>
+            {% if current_user.is_admin %}
+                <a href="{{ url_for('upload') }}" class="btn-upload">Upload Premium</a>
+            {% endif %}
+        </div>
+        <div class="movie-grid">
+            {% for video in videos %}
+                <div class="movie-tile">
+                    <div class="thumb-container">
+                        <span class="badge-tag" style="background-color:#ffc107; color:black;">PREMIUM</span>
+                        <img src="/thumbnails/{{ video.thumbnail }}" class="thumb-img" alt="Cover">
+                    </div>
+                    <div class="tile-body">
+                        <div>
+                            <h3 class="movie-title">{{ video.title }}</h3>
+                            <div class="movie-meta"><span>Locked Wall</span></div>
+                        </div>
+                        <a href="{{ url_for('watch_video', video_id=video.id) }}" class="btn-watch" style="border-color:#ffc107;">Unlock Movie</a>
+                    </div>
+                </div>
+            {% else %}
+                <div class="empty-state"><h3>No premium exclusive content published yet.</h3></div>
+            {% endfor %}
+        </div>
+
+        <!-- TAB D: OFFLINE DOWNLOADS SCREEN -->
+        {% elif active_tab == 'downloads' %}
+        <div class="section-header"><h2 class="section-title">Offline Downloads Cache</h2></div>
+        <div style="max-width: 650px; margin: 0 auto; width:100%;">
+            {% for item in watchlist_items %}
+                <div class="list-row">
+                    <div>
+                        <h4 style="font-weight: bold; margin-bottom: 4px;">{{ item.video.title }}</h4>
+                        <span style="color:#888; font-size:0.85rem;">Cached Offline Stream Asset</span>
+                    </div>
+                    <a href="{{ url_for('watch_video', video_id=item.video.id) }}" class="btn-upload" style="background-color: transparent; border:2px solid #e50914; color:white;">Play</a>
+                </div>
+            {% else %}
+                <div class="empty-state"><h3>No download history cached yet. Videos you watch will appear here.</h3></div>
+            {% endfor %}
+        </div>
+
+        <!-- TAB E: PROFILE (ME) DISPLAY SCREEN -->
+        {% elif active_tab == 'me' %}
+        <div class="profile-card">
+            <div class="avatar-large">{{ current_user.name[:2].upper() }}</div>
+            <h2 class="profile-name">{{ current_user.name }}</h2>
+            <div class="profile-email">{{ current_user.email }}</div>
+            
+            {% if current_user.is_admin %}
+                <div style="margin-bottom:15px;"><span class="badge-tag" style="position:static; background-color:#ffc107; color:black; padding:6px 15px; border-radius:6px; font-weight:bold;">SYSTEM SUPER ADMIN</span></div>
+            {% endif %}
+            
+            <div class="profile-bio">{{ current_user.bio }}</div>
+            
+            <div style="display:flex; flex-direction:column; gap:12px;">
+                {% if current_user.is_admin %}
+                    <a href="{{ url_for('upload') }}" class="btn-upload" style="text-align:center;">Publish Creator Video</a>
+                    <a href="{{ url_for('admin_panel') }}" class="btn-watch" style="border-color:#ffc107; color:#ffc107;">Open Admin Control Center</a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}" class="btn-watch" style="border-color:#e50914; background-color:#e50914; color:white;">Log Out From Account</a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 2. ENTERPRISE CINEMA BOTTOM NAVIGATION DOCK BAR WITHOUT EMOJIS -->
+    <div class="bottom-nav">
+        <a href="{{ url_for('dashboard', tab='home') }}" class="nav-item {% if active_tab == 'home' or not active_tab %}active{% endif %}">
+            <span class="nav-text">Home</span>
+        </a>
+        <a href="{{ url_for('dashboard', tab='shorts') }}" class="nav-item {% if active_tab == 'shorts' %}active{% endif %}">
+            <span class="nav-text">ShortTV</span>
+        </a>
+        <a href="{{ url_for('dashboard', tab='premium') }}" class="nav-item {% if active_tab == 'premium' %}active{% endif %}">
+            <span class="nav-text">Premium</span>
+        </a>
+        <a href="{{ url_for('dashboard', tab='downloads') }}" class="nav-item {% if active_tab == 'downloads' %}active{% endif %}">
+            <span class="nav-text">Downloads</span>
+        </a>
+        <a href="{{ url_for('dashboard', tab='me') }}" class="nav-item {% if active_tab == 'me' %}active{% endif %}">
+            <span class="nav-text">Me</span>
+        </a>
+    </div>
+
+</body>
+</html>
