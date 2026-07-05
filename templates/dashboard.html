@@ -182,8 +182,7 @@
 </head>
 <body>
 
-    <!-- 1. Top Sticky Interactive Header Platform -->
-    {% if active_tab in ['home', 'shorts', 'premium'] or not active_tab %}
+    <!-- Top Navigation sticky platform layout -->
     <div class="header-bar">
         <form class="search-form" method="GET" action="{{ url_for('dashboard') }}">
             <div class="search-container">
@@ -200,10 +199,9 @@
             <a href="{{ url_for('dashboard', category='Sports') }}" class="category-tag">Sports</a>
         </div>
     </div>
-    {% endif %}
 
     <div class="main-content">
-        <!-- Display Flash Notification Alerts locally -->
+        <!-- Display Flash Notification Alerts locally inside system -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -212,13 +210,11 @@
             {% endif %}
         {% endwith %}
 
-        <!-- TAB A: ALL PUBLICATIONS (HOME) DISPLAY SCREEN -->
+        <!-- HOME OR DEFAULT TAB: ALL VIDEOS RENDER MATRIX -->
         {% if active_tab == 'home' or not active_tab %}
         <div class="section-header">
             <h2 class="section-title">All Publications</h2>
-            {% if current_user.is_admin %}
-                <a href="{{ url_for('upload') }}" class="btn-upload">+ Upload</a>
-            {% endif %}
+            <a href="{{ url_for('upload') }}" class="btn-upload">+ Upload Video</a>
         </div>
         <div class="movie-grid">
             {% for video in videos %}
@@ -247,13 +243,11 @@
             {% endfor %}
         </div>
 
-        <!-- TAB B: SHORTSTV DISPLAY SCREEN -->
+        <!-- SHORTSTV DISPLAY TAB LAYER -->
         {% elif active_tab == 'shorts' %}
         <div class="section-header">
-            <h2 class="section-title">ShortsTV</h2>
-            {% if current_user.is_admin %}
-                <a href="{{ url_for('upload') }}" class="btn-upload">Upload Short</a>
-            {% endif %}
+            <h2 class="section-title">ShortsTV Feed</h2>
+            <a href="{{ url_for('upload') }}" class="btn-upload">Upload Short</a>
         </div>
         <div class="movie-grid">
             {% for video in videos %}
@@ -271,13 +265,11 @@
                 <div class="empty-state"><h3>No short videos available. Click upload above to add one.</h3></div>
             {% endfor %}
         </div>
-        <!-- TAB C: PREMIUM MONETIZATION SCREEN -->
+        <!-- PREMIUM VAULT HUB TAB LAYER -->
         {% elif active_tab == 'premium' %}
         <div class="section-header">
             <h2 class="section-title">Premium Exclusive</h2>
-            {% if current_user.is_admin %}
-                <a href="{{ url_for('upload') }}" class="btn-upload">Upload Premium</a>
-            {% endif %}
+            <a href="{{ url_for('upload') }}" class="btn-upload">Upload Premium</a>
         </div>
         <div class="movie-grid">
             {% for video in videos %}
@@ -299,7 +291,7 @@
             {% endfor %}
         </div>
 
-        <!-- TAB D: OFFLINE DOWNLOADS SCREEN -->
+        <!-- DOWNLOADS / SAVED WATCH LATER TAB LAYER -->
         {% elif active_tab == 'downloads' %}
         <div class="section-header"><h2 class="section-title">Offline Downloads Cache</h2></div>
         <div style="max-width: 650px; margin: 0 auto; width:100%;">
@@ -307,16 +299,16 @@
                 <div class="list-row">
                     <div>
                         <h4 style="font-weight: bold; margin-bottom: 4px;">{{ item.video.title }}</h4>
-                        <span style="color:#888; font-size:0.85rem;">Cached Offline Stream Asset</span>
+                        <span style="color:#888; font-size:0.85rem;">Saved Assets Stream Tracker</span>
                     </div>
                     <a href="{{ url_for('watch_video', video_id=item.video.id) }}" class="btn-upload" style="background-color: transparent; border:2px solid #e50914; color:white;">Play</a>
                 </div>
             {% else %}
-                <div class="empty-state"><h3>No download history cached yet. Videos you watch will appear here.</h3></div>
+                <div class="empty-state"><h3>No saved videos found in your downloads cache list.</h3></div>
             {% endfor %}
         </div>
 
-        <!-- TAB E: PROFILE (ME) DISPLAY SCREEN -->
+        <!-- PROFILE SYSTEM (ME) TAB LAYER -->
         {% elif active_tab == 'me' %}
         <div class="profile-card">
             <div class="avatar-large">{{ current_user.name[:2].upper() }}</div>
@@ -330,8 +322,8 @@
             <div class="profile-bio">{{ current_user.bio }}</div>
             
             <div style="display:flex; flex-direction:column; gap:12px;">
+                <a href="{{ url_for('upload') }}" class="btn-upload" style="text-align:center;">Publish Creator Video</a>
                 {% if current_user.is_admin %}
-                    <a href="{{ url_for('upload') }}" class="btn-upload" style="text-align:center;">Publish Creator Video</a>
                     <a href="{{ url_for('admin_panel') }}" class="btn-watch" style="border-color:#ffc107; color:#ffc107;">Open Admin Control Center</a>
                 {% endif %}
                 <a href="{{ url_for('logout') }}" class="btn-watch" style="border-color:#e50914; background-color:#e50914; color:white;">Log Out From Account</a>
@@ -340,7 +332,7 @@
         {% endif %}
     </div>
 
-    <!-- 2. ENTERPRISE CINEMA BOTTOM NAVIGATION DOCK BAR WITHOUT EMOJIS -->
+    <!-- BOTTOM CINEMA NAVIGATION DOCK BAR PLATFORM -->
     <div class="bottom-nav">
         <a href="{{ url_for('dashboard', tab='home') }}" class="nav-item {% if active_tab == 'home' or not active_tab %}active{% endif %}">
             <span class="nav-text">Home</span>
