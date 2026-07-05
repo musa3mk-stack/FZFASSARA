@@ -30,7 +30,7 @@ else:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Maximum 200MB file processing safety threshold
-app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024
 app.config['UPLOAD_VIDEO_DIR'] = os.path.join(project_root, 'uploads')
 app.config['UPLOAD_THUMB_DIR'] = os.path.join(project_root, 'thumbnails')
 
@@ -61,11 +61,11 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
-    password_hash = db.Column(db.String(200), nullable=True) 
+    password_hash = db.Column(db.String(200), nullable=True)
     bio = db.Column(db.String(300), default='No bio available.')
     profile_pic = db.Column(db.String(200), default='default_avatar.png')
     is_admin = db.Column(db.Boolean, default=False)
-    is_premium = db.Column(db.Boolean, default=False) 
+    is_premium = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     videos = db.relationship('Video', backref='uploader', lazy=True, cascade="all, delete-orphan")
@@ -89,11 +89,11 @@ class Video(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    category = db.Column(db.String(50), nullable=False) 
+    category = db.Column(db.String(50), nullable=False)
     filename = db.Column(db.String(200), nullable=False)
     thumbnail = db.Column(db.String(200), nullable=False)
-    is_locked = db.Column(db.Boolean, default=False) 
-    is_short = db.Column(db.Boolean, default=False) 
+    is_locked = db.Column(db.Boolean, default=False)
+    is_short = db.Column(db.Boolean, default=False)
     views = db.Column(db.Integer, default=0)
     downloads = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -108,7 +108,7 @@ class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     video_id = db.Column(db.Integer, db.ForeignKey('videos.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    parent_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True) 
+    parent_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
     text = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -152,8 +152,12 @@ def inject_permissions_script():
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         if ("Notification" in window) {
-            if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-                Notification.requestPermission();
+            if (Notification.permission!== "granted" && Notification.permission!== "denied") {
+                Notification.requestPermission().then(permission => {
+                    if (permission === "granted") {
+                        console.log("Notification access authorized successfully.");
+                    }
+                });
             }
         }
     });
@@ -162,7 +166,7 @@ def inject_permissions_script():
     return dict(notifications_script=script)
 
 # =========================================================================
-# CORE CONTROLLER OPERATIONS ENGINE
+# CORE CONTROLLER OPERATIONS ENGINE (FIXED & EXPANDED ROUTING LAYER)
 # =========================================================================
 
 @app.route('/')
@@ -174,8 +178,37 @@ def welcome():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    all_videos = Video.query.order_by(Video.id.desc()).all()
-    return render_template('dashboard.html', videos=all_videos)
+    tab = request.args.get('tab', 'home')
+    search_query = request.args.get('search', '')
+    category_query = request.args.get('category', 'All')
+
+    videos_query = Video.query
+
+    if tab == 'shorts':
+        videos_query = videos_query.filter_by(is_short=True)
+    elif tab == 'premium':
+        videos_query = videos_query.filter_by(is_locked=True)
+    else:
+        videos_query = videos_query.filter_by(is_short=False, is_locked=False)
+
+    if search_query:
+        videos_query = videos_query.filter(Video.title.contains(search_query))
+
+    if category_query and category_query!= 'All':
+        videos_query = videos_query.filter_by(category=category_query)
+
+    all_videos = videos_query.order_by(Video.id.desc()).all()
+    watchlist_items = WatchLater.query.filter_by(user_id=current_user.id).all()
+
+    return render_template('dashboard.html', videos=all_videos, active_tab=tab, watchlist_items=watchlist_items)
+
+@app.route('/privacy')
+def privacy_policy():
+    return render_template('privacy.html')
+
+@app.route('/terms')
+def terms_of_service():
+    return render_template('terms.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login_password():
@@ -188,9 +221,8 @@ def login_password():
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
             return redirect(url_for('dashboard'))
-        flash('Email ko Password ba daidai ba!', 'danger')
+        flash('Incorrect email or password!', 'danger')
     return render_template('login.html')
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
@@ -199,8 +231,9 @@ def register():
         name = request.form.get('name')
         email = request.form.get('email')
         password = request.form.get('password')
+
         if User.query.filter_by(email=email).first():
-            flash('Wannan Email din an riga an yi amfani da shi!', 'danger')
+            flash('This email is already in use!', 'danger')
         else:
             hashed_pw = generate_password_hash(password, method='scrypt')
             new_user = User(name=name, email=email, password_hash=hashed_pw)
@@ -218,7 +251,7 @@ def google_login():
         'GET', authorization_endpoint,
         params={
             "client_id": GOOGLE_CLIENT_ID,
-            "redirect_uri": REDIRECT_URI,
+            "redirect_uri": "https://fzfassara.onrender.com/login/google/callback",
             "scope": "openid email profile",
             "response_type": "code",
         }
@@ -230,18 +263,21 @@ def google_callback():
     code = request.args.get("code")
     google_provider_cfg = requests.get("https://google.com").json()
     token_endpoint = google_provider_cfg["token_endpoint"]
+
     token_response = requests.post(
         token_endpoint,
         data={
             "code": code,
             "client_id": GOOGLE_CLIENT_ID,
             "client_secret": os.environ.get('GOOGLE_CLIENT_SECRET', ''),
-            "redirect_uri": REDIRECT_URI,
+            "redirect_uri": "https://fzfassara.onrender.com/login/google/callback",
             "grant_type": "authorization_code"
         }
     ).json()
+
     userinfo_endpoint = google_provider_cfg["userinfo_endpoint"]
     userinfo_response = requests.get(userinfo_endpoint, headers={"Authorization": f"Bearer {token_response['access_token']}"}).json()
+
     if userinfo_response.get("email_verified"):
         email = userinfo_response["email"]
         name = userinfo_response["name"]
@@ -253,6 +289,7 @@ def google_callback():
         login_user(user)
         return redirect(url_for('dashboard'))
     return "Google Authentication Failed.", 400
+
 @app.route('/premium')
 @login_required
 def premium_hub():
@@ -265,26 +302,26 @@ def watch_video(video_id):
     if video.is_locked and not current_user.is_premium and not current_user.is_admin:
         flash('This is a Premium Video. You need to unlock premium tier access first.', 'warning')
         return redirect(url_for('premium_hub'))
-        
+
     video.views += 1
     history_entry = WatchHistory(user_id=current_user.id, video_id=video.id)
     db.session.add(history_entry)
     db.session.commit()
-    
-    recommended = Video.query.filter(Video.category == video.category, Video.id != video.id).limit(4).all()
-    
+
+    recommended = Video.query.filter(Video.category == video.category, Video.id!= video.id).limit(4).all()
+
     if request.method == 'POST' and 'comment_text' in request.form:
         comment_text = request.form.get('comment_text')
         parent_id = request.form.get('parent_id')
         if comment_text:
             new_comment = Comment(
-                video_id=video.id, user_id=current_user.id, 
+                video_id=video.id, user_id=current_user.id,
                 text=comment_text, parent_id=int(parent_id) if parent_id else None
             )
             db.session.add(new_comment)
             if parent_id:
                 parent_comment = Comment.query.get(int(parent_id))
-                if parent_comment and parent_comment.user_id != current_user.id:
+                if parent_comment and parent_comment.user_id!= current_user.id:
                     notif = Notification(user_id=parent_comment.user_id, message=f"{current_user.name} replied to your comment on movie: {video.title}")
                     db.session.add(notif)
             db.session.commit()
@@ -349,16 +386,16 @@ def upload():
         category = request.form.get('category')
         is_premium_wall = request.form.get('is_premium') == 'true'
         is_short_tv = request.form.get('is_short') == 'true'
-        
+
         video_file = request.files.get('video_file')
         thumb_file = request.files.get('thumbnail_file')
-        
+
         if video_file and thumb_file:
             video_filename = secure_filename(video_file.filename)
             thumb_filename = secure_filename(thumb_file.filename)
             video_file.save(os.path.join(app.config['UPLOAD_VIDEO_DIR'], video_filename))
             thumb_file.save(os.path.join(app.config['UPLOAD_THUMB_DIR'], thumb_filename))
-            
+
             new_video = Video(
                 user_id=current_user.id, title=title, description=description,
                 category=category, filename=video_filename, thumbnail=thumb_filename,
