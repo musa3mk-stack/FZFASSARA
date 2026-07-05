@@ -4,21 +4,17 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-import requests
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'fz_fassara_secret_key_12345'
 
+# Hadawa da Database din da ka kwakko a Render
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///fzfassara.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
-
-GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
-GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
-REDIRECT_URI = os.environ.get('REDIRECT_URI', 'https://fzfassara.onrender.com/login/google/callback')
 
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
@@ -122,63 +118,6 @@ def register():
         return render_template('register_2.html')
     except:
         return render_template('register.html')
-
-@app.route('/google-login')
-def google_login():
-    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        flash('Google Login keys are not configured in Render Environment Variables!')
-        return redirect(url_for('login_password'))
-    try:
-        google_provider_cfg = requests.get("https://accounts.google.com/.well-known/openid-configuration").json()
-        authorization_endpoint = google_provider_cfg["authorization_endpoint"]
-        request_uri = requests.Request('GET', authorization_endpoint, params={
-            "client_id": GOOGLE_CLIENT_ID,
-            "redirect_uri": REDIRECT_URI,
-            "scope": "openid email profile",
-            "response_type": "code",
-        }).prepare().url
-        return redirect(request_uri)
-    except Exception as e:
-        flash(f'Google Login Error: {str(e)}')
-        return redirect(url_for('login_password'))
-
-@app.route('/login/google/callback')
-def google_callback():
-    code = request.args.get("code")
-    try:
-        google_provider_cfg = requests.get("https://accounts.google.com/.well-known/openid-configuration").json()
-        token_endpoint = google_provider_cfg["token_endpoint"]
-        token_response = requests.post(token_endpoint, data={
-            "code": code,
-            "client_id": GOOGLE_CLIENT_ID,
-            "client_secret": GOOGLE_CLIENT_SECRET,
-            "redirect_uri": REDIRECT_URI,
-            "grant_type": "authorization_code"
-        }).json()
-
-        if 'access_token' not in token_response:
-            flash('Google Authentication Failed')
-            return redirect(url_for('login_password'))
-
-        userinfo_endpoint = google_provider_cfg["userinfo_endpoint"]
-        userinfo_response = requests.get(userinfo_endpoint, headers={"Authorization": f"Bearer {token_response['access_token']}"}).json()
-
-        if userinfo_response.get("email_verified"):
-            email = userinfo_response["email"]
-            name = userinfo_response.get("name", email.split('@')[0])
-            user = User.query.filter_by(email=email).first()
-            if not user:
-                user = User(username=name, email=email, password=None)
-                db.session.add(user)
-                db.session.commit()
-            login_user(user)
-            return redirect(url_for('dashboard'))
-        
-        flash('Google account email not verified!')
-        return redirect(url_for('login_password'))
-    except Exception as e:
-        flash(f'Callback error: {str(e)}')
-        return redirect(url_for('login_password'))
 
 @app.route('/dashboard')
 @login_required
