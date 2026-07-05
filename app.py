@@ -9,7 +9,7 @@ import requests
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'fz_fassara_secret_key_12345'
 
-# GYARA 1: PostgreSQL don Render, SQLite don gwajin gida
+# Dauko DATABASE_URL na Render, idan babu amfani da SQLite na gida
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -17,7 +17,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///fzfassara.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
-# GYARA 2: Bayanan Google OAuth na Gaskiya
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
 REDIRECT_URI = os.environ.get('REDIRECT_URI', 'https://fzfassara.onrender.com/login/google/callback')
@@ -31,7 +30,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login_password'
 
 # ---------------------------------------------------------------------------
-# DATA MODELS
+# DATABASE MODELS
 # ---------------------------------------------------------------------------
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -87,6 +86,7 @@ def welcome():
     return render_template('welcome.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@app.route('/login_password', methods=['GET', 'POST'])
 def login_password():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -99,7 +99,31 @@ def login_password():
             flash('Kuskure a Imel ko Password!')
     return render_template('login.html')
 
-# AN GYARA MATSALA TAFARKON: Dubawa ko an saita Google Keys
+@app.route('/register', methods=['GET', 'POST'])
+@app.route('/signup', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+
+        user_exists = User.query.filter((User.email == email) | (User.username == username)).first()
+        if user_exists:
+            flash('Wannan sunan ko Imel din riga an yi amfani da shi!')
+            return redirect(request.url)
+
+        hashed_pw = generate_password_hash(password, method='scrypt')
+        new_user = User(username=username, email=email, password=hashed_pw)
+        db.session.add(new_user)
+        db.session.commit()
+        flash('An kirkiiri account lafiya! Shiga yanzu.')
+        return redirect(url_for('login_password'))
+    
+    try:
+        return render_template('register_2.html')
+    except:
+        return render_template('register.html')
+
 @app.route('/google-login')
 def google_login():
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
@@ -150,31 +174,13 @@ def google_callback():
                 db.session.commit()
             login_user(user)
             return redirect(url_for('dashboard'))
-        flash('Google Authentication Failed: Email not verified')
+        
+        # GYARA 1: Kara sako idan imel din Google ba shi da kariya
+        flash('Google account email not verified!')
         return redirect(url_for('login_password'))
     except Exception as e:
-        flash(f'Google Callback Error: {str(e)}')
+        flash(f'Callback error: {str(e)}')
         return redirect(url_for('login_password'))
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
-
-        user_exists = User.query.filter((User.email == email) | (User.username == username)).first()
-        if user_exists:
-            flash('Wannan sunan ko Imel din riga an yi amfani da shi!')
-            return redirect(url_for('register'))
-
-        hashed_pw = generate_password_hash(password, method='scrypt')
-        new_user = User(username=username, email=email, password=hashed_pw)
-        db.session.add(new_user)
-        db.session.commit()
-        flash('An kirkiiri account lafiya! Shiga yanzu.')
-        return redirect(url_for('login_password'))
-    return render_template('register_2.html')
 
 @app.route('/dashboard')
 @login_required
@@ -186,7 +192,6 @@ def dashboard():
     watchlist_items = Video.query.filter(Video.id.in_(watchlist_video_ids)).all() if watchlist_video_ids else []
     return render_template('dashboard_2.html', active_tab=tab, videos=videos, watchlist_items=watchlist_items)
 
-# AN GYARA MATSALA TA BIYU: Tabbatar da an zabi bidiyo da suna kafin dora shi
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload():
@@ -200,9 +205,8 @@ def upload():
         if not video_file or video_file.filename == '':
             flash('Da fatan za a zaɓi fayil ɗin bidiyo!')
             return redirect(request.url)
-        
         if not title:
-            flash('Dole ne ka saka wa bidiyo suna (Title)!')
+            flash('Dole ne ka saka wa bidiyo suna!')
             return redirect(request.url)
 
         v_filename = secure_filename(video_file.filename)
@@ -233,13 +237,12 @@ def watch_video(video_id):
 
     video.views += 1
     db.session.commit()
-
     recommended = Video.query.filter(Video.category == video.category, Video.id != video.id).limit(4).all()
     has_liked = Like.query.filter_by(user_id=current_user.id, video_id=video.id).first() is not None
     likes_count = Like.query.filter_by(video_id=video.id).count()
-
     return render_template('video_2.html', video=video, recommended=recommended, has_liked=has_liked, likes=likes_count)
 
+# GYARA 2: Dawo da duka sauran kofofin (Routes) domin gudun 404 a HTML
 @app.route('/like/<int:video_id>')
 @login_required
 def like_video(video_id):
