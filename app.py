@@ -4,15 +4,19 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from authlib.integrations.flask_client import OAuth
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'fz_fassara_secret_key_12345'
 
-# Hadawa da Database din da ka kwakko a Render
+# Hadawa da Database tare da wanke kowane sarari (space) ta atomatik
 database_url = os.environ.get('DATABASE_URL')
-if database_url and database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///fzfassara.db'
+if database_url:
+    database_url = database_url.strip()  # Wannan yana goge space na kuskure lokacin tura kodi
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url if database_url else 'sqlite:///fzfassara.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
@@ -23,6 +27,27 @@ db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login_password'
+
+# Saita OAuth na Google Login
+oauth = OAuth(app)
+google_client_id = os.environ.get('GOOGLE_CLIENT_ID')
+google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
+
+google = None
+google_configured = False
+
+if google_client_id and google_client_secret:
+    google_client_id = google_client_id.strip()
+    google_client_secret = google_client_secret.strip()
+    
+    google = oauth.register(
+        name='google',
+        client_id=google_client_id,
+        client_secret=google_client_secret,
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'}
+    )
+    google_configured = True
 
 # ---------------------------------------------------------------------------
 # DATABASE MODELS
@@ -92,7 +117,35 @@ def login_password():
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid email or password!')
-    return render_template('login.html')
+    return render_template('login.html', google_configured=google_configured)
+
+@app.route('/login/google')
+def login_google():
+    if not google_configured:
+        flash('Google Login keys are not configured in Render Environment Variables!')
+        return redirect(url_for('login_password'))
+    redirect_uri = url_for('authorize_google', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/authorize/google')
+def authorize_google():
+    if not google_configured:
+        return redirect(url_for('login_password'))
+    token = google.authorize_access_token()
+    user_info = token.get('userinfo')
+    if user_info:
+        email = user_info.get('email')
+        name = user_info.get('name') or user_info.get('given_name') or email.split('@')[0]
+        
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            user = User(username=name, email=email, is_admin=False)
+            db.session.add(user)
+            db.session.commit()
+        
+        login_user(user)
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login_password'))
 
 @app.route('/register', methods=['GET', 'POST'])
 @app.route('/signup', methods=['GET', 'POST'])
@@ -115,9 +168,9 @@ def register():
         return redirect(url_for('login_password'))
     
     try:
-        return render_template('register_2.html')
+        return render_template('register_2.html', google_configured=google_configured)
     except:
-        return render_template('register.html')
+        return render_template('register.html', google_configured=google_configured)
 
 @app.route('/dashboard')
 @login_required
