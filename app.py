@@ -34,13 +34,13 @@ app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
 app.config['UPLOAD_VIDEO_DIR'] = os.path.join(project_root, 'uploads')
 app.config['UPLOAD_THUMB_DIR'] = os.path.join(project_root, 'thumbnails')
 
-# Google OAuth Credentials Configuration (Direct Fallback Matrix)
-GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '://googleusercontent.com')
-REDIRECT_URI = "https://onrender.com"
+# Google OAuth Credentials Configuration
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+REDIRECT_URI = os.environ.get('REDIRECT_URI', 'http://localhost:8080/login/google/callback')
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
-login_manager.login_view = 'welcome'
+login_manager.login_view = 'login'
 
 # Automatic offline media storage setup folders
 for folder in [app.config['UPLOAD_VIDEO_DIR'], app.config['UPLOAD_THUMB_DIR']]:
@@ -147,6 +147,26 @@ class Notification(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+@app.route('/')
+def welcome():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    return render_template('welcome.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        user = User.query.filter_by(email=email).first()
+        if user and user.password_hash and check_password_hash(user.password_hash, password):
+            login_user(user)
+            return redirect(url_for('dashboard'))
+        flash('Invalid email or password', 'danger')
+    return render_template('login.html')
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
@@ -169,13 +189,13 @@ def register():
 
 @app.route('/login/google')
 def google_login():
-    google_provider_cfg = requests.get("https://google.com").json()
+    google_provider_cfg = requests.get("https://accounts.google.com/.well-known/openid-configuration").json()
     authorization_endpoint = google_provider_cfg["authorization_endpoint"]
     request_uri = requests.Request(
         'GET', authorization_endpoint,
         params={
             "client_id": GOOGLE_CLIENT_ID,
-            "redirect_uri": "https://onrender.com",
+            "redirect_uri": REDIRECT_URI,
             "scope": "openid email profile",
             "response_type": "code",
         }
@@ -185,7 +205,7 @@ def google_login():
 @app.route('/login/google/callback')
 def google_callback():
     code = request.args.get("code")
-    google_provider_cfg = requests.get("https://google.com").json()
+    google_provider_cfg = requests.get("https://accounts.google.com/.well-known/openid-configuration").json()
     token_endpoint = google_provider_cfg["token_endpoint"]
 
     token_response = requests.post(
@@ -193,11 +213,15 @@ def google_callback():
         data={
             "code": code,
             "client_id": GOOGLE_CLIENT_ID,
-            "client_secret": os.environ.get('GOOGLE_CLIENT_SECRET', ''),
-            "redirect_uri": "https://onrender.com",
+            "client_secret": os.environ.get('GOOGLE_CLIENT_SECRET'),
+            "redirect_uri": REDIRECT_URI,
             "grant_type": "authorization_code"
         }
     ).json()
+
+    if 'access_token' not in token_response:
+        flash('Google Authentication Failed. Check Client ID and Secret.', 'danger')
+        return redirect(url_for('login'))
 
     userinfo_endpoint = google_provider_cfg["userinfo_endpoint"]
     userinfo_response = requests.get(userinfo_endpoint, headers={"Authorization": f"Bearer {token_response['access_token']}"}).json()
@@ -212,12 +236,34 @@ def google_callback():
             db.session.commit()
         login_user(user)
         return redirect(url_for('dashboard'))
-    return "Google Authentication Failed.", 400
+    flash('Google Authentication Failed.', 'danger')
+    return redirect(url_for('login'))
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    user_videos = Video.query.filter_by(user_id=current_user.id).order_by(Video.created_at.desc()).all()
+    all_videos = Video.query.filter_by(is_short=False).order_by(Video.created_at.desc()).limit(20).all()
+    shorts = Video.query.filter_by(is_short=True).order_by(Video.created_at.desc()).limit(10).all()
+    notifications = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+    return render_template('dashboard.html',
+                         user_videos=user_videos,
+                         all_videos=all_videos,
+                         shorts=shorts,
+                         notifications_count=notifications)
 
 @app.route('/premium')
 @login_required
 def premium_hub():
     return render_template('premium.html')
+
+@app.route('/terms')
+def terms():
+    return render_template('terms.html')
+
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
 
 @app.route('/video/<int:video_id>', methods=['GET', 'POST'])
 @login_required
