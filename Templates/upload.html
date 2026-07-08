@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FZ Fassara - Publish Studio</title>
+    <style>
+        /* Pure local premium styling - 100% independent of internet data */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background-color: #141414; 
+            color: #ffffff; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 20px auto;
+        }
+        .header-area {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+        .btn-back {
+            background-color: transparent;
+            color: #ffffff;
+            border: 2px solid #444444;
+            padding: 10px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-right: 15px;
+            font-size: 1.1rem;
+        }
+        .btn-back:active { background-color: #2d2d2d; }
+        .page-title { color: #e50914; font-weight: 900; font-size: 1.6rem; }
+        
+        .upload-card { 
+            background-color: #1f1f1f; 
+            border: 2px solid #2d2d2d; 
+            border-radius: 12px; 
+            padding: 30px 20px; 
+            box-shadow: 0 6px 15px rgba(0,0,0,0.4);
+        }
+        .form-group {
+            margin-bottom: 22px;
+        }
+        .form-label { 
+            display: block;
+            margin-bottom: 9px;
+            color: #aaaaaa; 
+            font-size: 0.95rem; 
+            font-weight: bold;
+        }
+        /* Large Input Form Controls for Easy Mobile Use */
+        .form-control, .form-select, .form-textarea {
+            width: 100%;
+            padding: 16px;
+            background-color: #2d2d2d;
+            color: #ffffff;
+            border: 1px solid #444444;
+            border-radius: 8px;
+            font-size: 1.05rem;
+            outline: none;
+        }
+        .form-control:focus, .form-select:focus, .form-textarea:focus {
+            border-color: #e50914;
+        }
+        .form-textarea {
+            resize: none;
+            font-family: inherit;
+        }
+
+        /* Checkbox Toggles Advanced Architecture Grid */
+        .toggle-group {
+            background-color: #141414;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333333;
+            margin-bottom: 22px;
+            display: flex;
+            align-items: center;
+        }
+        .toggle-input {
+            width: 24px;
+            height: 24px;
+            accent-color: #e50914;
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        .toggle-label {
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        .toggle-desc {
+            display: block;
+            font-size: 0.85rem;
+            color: #888888;
+            margin-top: 2px;
+        }
+
+        /* Upgraded Custom Styling for File Upload Fields */
+        input[type="file"] {
+            background-color: #2d2d2d;
+            padding: 12px;
+            cursor: pointer;
+        }
+        input[type="file"]::-webkit-file-upload-button {
+            background-color: #e50914;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        /* Large Bold Premium Action Submit Button */
+        .btn-submit { 
+            display: block;
+            width: 100%;
+            background-color: #e50914; 
+            color: #ffffff; 
+            font-weight: bold;
+            font-size: 1.15rem;
+            border: none;
+            padding: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(229, 9, 20, 0.3);
+        }
+        .btn-submit:active {
+            transform: scale(0.99);
+            background-color: #b81d24;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header-area">
+            <a href="{{ url_for('dashboard') }}" class="btn-back">←</a>
+            <h2 class="page-title">Creator Studio</h2>
+        </div>
+
+        <div class="upload-card">
+            <!-- Multipart Form Enforcement Matrix -->
+            <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="form-group">
+                    <label class="form-label">Video Title</label>
+                    <input type="text" name="title" class="form-control" placeholder="Enter movie or video title" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Category / Genre</label>
+                    <select name="category" class="form-select" required>
+                        <option value="" selected disabled>Choose a category...</option>
+                        <option value="Fassara">Fassara (Indian/American)</option>
+                        <option value="Hausa">Hausa Movies</option>
+                        <option value="Action">Action / Thriller</option>
+                        <option value="Comedy">Comedy</option>
+                        <option value="Sports">Sports</option>
+                        <option value="Other">Other Videos</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Description (Optional)</label>
+                    <textarea name="description" class="form-textarea" rows="3" placeholder="Write a short brief about this video..."></textarea>
+                </div>
+
+                <!-- NEW OPTION A: ShortTV Routing Activation Toggle -->
+                <div class="toggle-group">
+                    <input type="checkbox" name="is_short" value="true" id="shortCheck" class="toggle-input">
+                    <div>
+                        <label for="shortCheck" class="toggle-label">Publish as Short TV Video</label>
+                        <span class="toggle-desc">Saka wannan idan bidiyon na gajere ne (TikTok format style)</span>
+                    </div>
+                </div>
+
+                <!-- NEW OPTION B: Premium Paywall Security Activation Toggle -->
+                <div class="toggle-group">
+                    <input type="checkbox" name="is_premium" value="true" id="premiumCheck" class="toggle-input">
+                    <div>
+                        <label for="premiumCheck" class="toggle-label">Lock as Premium Exclusive</label>
+                        <span class="toggle-desc">Kulle bidiyon ta yadda sai masu asusun Premium kawai zasu kalla</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Select Video File (MP4, Max 200MB)</label>
+                    <input type="file" name="video_file" class="form-control" accept="video/mp4" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Select Cover Image (Thumbnail - JPG/PNG)</label>
+                    <input type="file" name="thumbnail_file" class="form-control" accept="image/*" required>
+                </div>
+
+                <button type="submit" class="btn-submit">Publish Video Asset</button>
+            </form>
+        </div>
+    </div>
+
+</body>
+</html>

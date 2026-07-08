@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FZ Fassara - Admin Control Center</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #141414; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; padding-bottom: 40px; }
+        .navbar { background-color: #000000; border-bottom: 2px solid #252525; padding: 15px 20px; display: flex; align-items: center; }
+        .btn-back { background-color: transparent; color: #ffffff; border: 2px solid #444444; padding: 8px 14px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-right: 15px; }
+        .brand-title { color: #ffc107; font-weight: bold; font-size: 1.2rem; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        
+        /* Large Analytics Counters Grid */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; }
+        .stat-box { background-color: #1f1f1f; border-left: 5px solid #e50914; padding: 18px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); border-top: 1px solid #2d2d2d; border-right: 1px solid #2d2d2d; border-bottom: 1px solid #2d2d2d; }
+        .stat-label { color: #aaaaaa; font-size: 0.85rem; font-weight: bold; text-transform: uppercase; }
+        .stat-value { font-size: 2rem; font-weight: 900; color: #ffffff; margin-top: 5px; }
+        
+        .admin-card { background-color: #1f1f1f; border: 2px solid #2d2d2d; border-radius: 12px; padding: 20px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .card-title { font-size: 1.2rem; font-weight: 900; margin-bottom: 15px; border-left: 4px solid #e50914; padding-left: 10px; }
+        
+        /* Big Bold Accessible Tables Matrix */
+        .table-wrapper { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { padding: 14px 10px; color: #aaaaaa; font-size: 0.9rem; font-weight: bold; border-bottom: 2px solid #2d2d2d; }
+        td { padding: 16px 10px; font-size: 0.95rem; border-bottom: 1px solid #2d2d2d; color: #dddddd; }
+        .row-bold { font-weight: bold; color: white; text-transform: capitalize; }
+        
+        .badge { background-color: #2d2d2d; color: #ffffff; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .badge-admin { background-color: #ffc107; color: #000000; }
+        
+        .btn-delete { background-color: transparent; color: #e50914; border: 2px solid #e50914; padding: 8px 14px; border-radius: 6px; font-weight: bold; text-decoration: none; font-size: 0.85rem; cursor: pointer; }
+        .btn-delete:active { background-color: #e50914; color: white; }
+        .alert-box { background-color: #2d2d2d; color: #ffc107; padding: 12px; border-radius: 6px; margin-bottom: 20px; text-align: center; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <nav class="navbar"><a href="{{ url_for('dashboard') }}" class="btn-back">←</a><h1 class="brand-title">🛡 Admin Dashboard</h1></nav>
+    <div class="container">
+        {% with messages = get_flashed_messages() %}{% if messages %}{% for message in messages %}<div class="alert-box">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
+        
+        <div class="stats-grid">
+            <div class="stat-box"><div class="stat-label">Total Users</div><div class="stat-value">{{ users|length }}</div></div>
+            <div class="stat-box" style="border-left-color: #ffc107;"><div class="stat-label">Total Videos</div><div class="stat-value">{{ videos|length }}</div></div>
+        </div>
+
+        <div class="admin-card">
+            <h3 class="card-title" style="color: #e50914;">Manage Users</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th>User Name</th><th>Email</th><th>Role</th><th>Action</th></tr></thead>
+                    <tbody>
+                        {% for user in users %}
+                            <tr>
+                                <td class="row-bold">{{ user.username }}</td>
+                                <td style="color: #888888; font-size: 0.9rem;">{{ user.email }}</td>
+                                <td><span class="badge {% if user.is_admin %}badge-admin{% endif %}">{% if user.is_admin %}Admin{% else %}Member{% endif %}</span></td>
+                                <td>{% if not user.is_admin %}<a href="{{ url_for('admin_delete_user', user_id=user.id) }}" class="btn-delete" onclick="return confirm('Delete user account?');">Delete</a>{% else %}<span style="color:#666; font-size:0.85rem;">Protected</span>{% endif %}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="admin-card">
+            <h3 class="card-title" style="color: #ffc107;">Manage Content</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th>Movie Title</th><th>Category</th><th>Views</th><th>Action</th></tr></thead>
+                    <tbody>
+                        {% for video in videos %}
+                            <tr>
+                                <td class="row-bold" style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ video.title }}</td>
+                                <td><span class="badge" style="text-transform: uppercase; font-size:0.75rem;">{{ video.category }}</span></td>
+                                <td>👁 {{ video.views }}</td>
+                                <td><a href="{{ url_for('admin_delete_video', video_id=video.id) }}" class="btn-delete" onclick="return confirm('Delete video?');">Delete</a></td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="4" style="text-align: center; color: #666;">No content currently available.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
