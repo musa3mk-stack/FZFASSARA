@@ -193,11 +193,13 @@
         </form>
         
         <div class="category-slider">
-            <a href="{{ url_for('dashboard', category='All') }}" class="category-tag active">All</a>
-            <a href="{{ url_for('dashboard', category='Movies') }}" class="category-tag">Movies</a>
-            <a href="{{ url_for('dashboard', category='News') }}" class="category-tag">News</a>
-            <a href="{{ url_for('dashboard', category='Music') }}" class="category-tag">Music</a>
-            <a href="{{ url_for('dashboard', category='Sports') }}" class="category-tag">Sports</a>
+            <a href="{{ url_for('dashboard', tab=active_tab, category='All') }}" class="category-tag {% if not selected_category or selected_category == 'All' %}active{% endif %}">All</a>
+            <a href="{{ url_for('dashboard', tab=active_tab, category='Fassara') }}" class="category-tag {% if selected_category == 'Fassara' %}active{% endif %}">Fassara</a>
+            <a href="{{ url_for('dashboard', tab=active_tab, category='Hausa') }}" class="category-tag {% if selected_category == 'Hausa' %}active{% endif %}">Hausa</a>
+            <a href="{{ url_for('dashboard', tab=active_tab, category='Action') }}" class="category-tag {% if selected_category == 'Action' %}active{% endif %}">Action</a>
+            <a href="{{ url_for('dashboard', tab=active_tab, category='Comedy') }}" class="category-tag {% if selected_category == 'Comedy' %}active{% endif %}">Comedy</a>
+            <a href="{{ url_for('dashboard', tab=active_tab, category='Sports') }}" class="category-tag {% if selected_category == 'Sports' %}active{% endif %}">Sports</a>
+            <a href="{{ url_for('dashboard', tab=active_tab, category='Other') }}" class="category-tag {% if selected_category == 'Other' %}active{% endif %}">Other</a>
         </div>
     </div>
     {% endif %}
@@ -334,6 +336,8 @@
                     <a href="{{ url_for('upload') }}" class="btn-upload" style="text-align:center;">Publish Creator Video</a>
                     <a href="{{ url_for('admin_panel') }}" class="btn-watch" style="border-color:#ffc107; color:#ffc107;">Open Admin Control Center</a>
                 {% endif %}
+                <a href="{{ url_for('watchlist_page') }}" class="btn-watch" style="text-align:center;">My Watchlist</a>
+                <a href="{{ url_for('history_page') }}" class="btn-watch" style="text-align:center;">Watch History</a>
                 <a href="{{ url_for('logout') }}" class="btn-watch" style="border-color:#e50914; background-color:#e50914; color:white;">Log Out From Account</a>
             </div>
         </div>
