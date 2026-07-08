@@ -54,7 +54,7 @@
                     <tbody>
                         {% for user in users %}
                             <tr>
-                                <td class="row-bold">{{ user.name }}</td>
+                                <td class="row-bold">{{ user.username }}</td>
                                 <td style="color: #888888; font-size: 0.9rem;">{{ user.email }}</td>
                                 <td><span class="badge {% if user.is_admin %}badge-admin{% endif %}">{% if user.is_admin %}Admin{% else %}Member{% endif %}</span></td>
                                 <td>{% if not user.is_admin %}<a href="{{ url_for('admin_delete_user', user_id=user.id) }}" class="btn-delete" onclick="return confirm('Delete user account?');">Delete</a>{% else %}<span style="color:#666; font-size:0.85rem;">Protected</span>{% endif %}</td>
