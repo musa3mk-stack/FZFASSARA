@@ -170,6 +170,16 @@ class Watchlist(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
 
+# Create tables at import time, not just under `if __name__ == '__main__'`.
+# On Render, gunicorn imports this module directly (`gunicorn app:app`) and
+# NEVER executes the `if __name__ == '__main__':` block below, so
+# db.create_all() was silently never running in production — meaning no
+# tables existed, and any query (even the login-manager loading the current
+# user) crashed with a 500 Internal Server Error. Running it here guarantees
+# it happens both locally and under gunicorn.
+with app.app_context():
+    db.create_all()
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -423,8 +433,6 @@ def logout():
     return redirect(url_for('welcome'))
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     # debug is now driven by the FLASK_DEBUG env var (see config above) and
     # defaults to False. On Render you should be running this via a
     # production WSGI server (e.g. gunicorn app:app) rather than this
