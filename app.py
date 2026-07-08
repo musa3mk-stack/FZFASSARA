@@ -129,6 +129,23 @@ else:
           'configured in your environment variables on Render.')
 
 # ---------------------------------------------------------------------------
+# ADMIN BOOTSTRAP
+# ---------------------------------------------------------------------------
+# On Render's free plan there's no Shell access, so there's no way to run a
+# one-off Python command to flip is_admin=True for your account. Instead,
+# set an ADMIN_EMAIL environment variable to your email address — the first
+# time that account logs in (password or Google), it's automatically
+# promoted to admin. This only ever promotes; it never removes admin from
+# anyone, and it's safe to leave the env var set permanently.
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', '').strip().lower()
+
+
+def promote_if_designated_admin(user):
+    if ADMIN_EMAIL and user.email.lower() == ADMIN_EMAIL and not user.is_admin:
+        user.is_admin = True
+        db.session.commit()
+
+# ---------------------------------------------------------------------------
 # DATABASE MODELS
 # ---------------------------------------------------------------------------
 class User(UserMixin, db.Model):
@@ -215,6 +232,7 @@ def login_password():
         user = User.query.filter_by(email=email).first()
         if user and user.password and check_password_hash(user.password, password):
             login_user(user)
+            promote_if_designated_admin(user)
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid email or password!')
@@ -287,6 +305,7 @@ def authorize_google():
         db.session.commit()
 
     login_user(user)
+    promote_if_designated_admin(user)
     return redirect(url_for('dashboard'))
 
 @app.route('/register', methods=['GET', 'POST'])
