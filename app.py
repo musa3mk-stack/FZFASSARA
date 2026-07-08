@@ -208,7 +208,7 @@ def login_password():
     return render_template('login.html', google_configured=google_configured)
 
 @app.route('/login/google')
-def login_google():
+def google_login():
     if not google_configured:
         flash('Google Login keys are not configured in Render Environment Variables!')
         return redirect(url_for('login_password'))
