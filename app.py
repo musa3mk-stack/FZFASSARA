@@ -296,10 +296,7 @@ def register():
         flash('Account created successfully! Please log in.')
         return redirect(url_for('login_password'))
     
-    try:
-        return render_template('register_2.html', google_configured=google_configured)
-    except:
-        return render_template('register.html', google_configured=google_configured)
+    return render_template('register.html', google_configured=google_configured)
 
 @app.route('/dashboard')
 @login_required
@@ -309,7 +306,7 @@ def dashboard():
     watchlist_entries = Watchlist.query.filter_by(user_id=current_user.id).all()
     watchlist_video_ids = [w.video_id for w in watchlist_entries]
     watchlist_items = Video.query.filter(Video.id.in_(watchlist_video_ids)).all() if watchlist_video_ids else []
-    return render_template('dashboard_2.html', active_tab=tab, videos=videos, watchlist_items=watchlist_items)
+    return render_template('dashboard.html', active_tab=tab, videos=videos, watchlist_items=watchlist_items)
 
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
@@ -347,7 +344,7 @@ def upload():
         db.session.commit()
         flash('Video uploaded successfully!')
         return redirect(url_for('dashboard'))
-    return render_template('upload_2.html')
+    return render_template('upload.html')
 
 @app.route('/video/<int:video_id>', methods=['GET', 'POST'])
 @login_required
@@ -365,7 +362,7 @@ def watch_video(video_id):
     recommended = Video.query.filter(Video.category == video.category, Video.id != video.id).limit(4).all()
     has_liked = Like.query.filter_by(user_id=current_user.id, video_id=video.id).first() is not None
     likes_count = Like.query.filter_by(video_id=video.id).count()
-    return render_template('video_2.html', video=video, recommended=recommended, has_liked=has_liked, likes=likes_count)
+    return render_template('video.html', video=video, recommended=recommended, has_liked=has_liked, likes=likes_count)
 
 @app.route('/like/<int:video_id>')
 @login_required
@@ -416,15 +413,15 @@ def admin_panel():
         return redirect(url_for('dashboard'))
     users = User.query.all()
     videos = Video.query.all()
-    return render_template('admin_2.html', users=users, videos=videos)
+    return render_template('admin.html', users=users, videos=videos)
 
 @app.route('/privacy')
 def privacy():
-    return render_template('privacy_2.html')
+    return render_template('privacy.html')
 
 @app.route('/terms')
 def terms():
-    return render_template('terms_2.html')
+    return render_template('terms.html')
 
 @app.route('/logout')
 @login_required
