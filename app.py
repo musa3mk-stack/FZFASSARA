@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 from authlib.integrations.flask_client import OAuth
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='Templates')
 
 # ---------------------------------------------------------------------------
 # SECURITY / DEPLOYMENT CONFIG
