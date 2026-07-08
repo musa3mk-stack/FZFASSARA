@@ -1,13 +1,61 @@
 import os
+import uuid
+import secrets
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_wtf import CSRFProtect
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 from authlib.integrations.flask_client import OAuth
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'fz_fassara_secret_key_12345'
+
+# ---------------------------------------------------------------------------
+# SECURITY / DEPLOYMENT CONFIG
+# ---------------------------------------------------------------------------
+# SECRET_KEY must come from the environment in production. If it changes on
+# every restart (e.g. a randomly generated fallback), all logged-in sessions
+# are invalidated AND the Google OAuth "state" cookie signed at login time
+# won't match the one checked at /authorize/google, causing Google Login to
+# fail with a "mismatching_state" / "CSRF Warning" error on Render.
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    # Fallback only for local development so the app still boots.
+    # On Render, set SECRET_KEY as an Environment Variable so it stays
+    # constant across restarts and across the multiple worker processes
+    # a production server may run.
+    SECRET_KEY = secrets.token_hex(32)
+    print('WARNING: SECRET_KEY env var not set. Using a temporary random key '
+          '(sessions and Google Login will break on restart). Set SECRET_KEY '
+          'in your environment for production.')
+app.config['SECRET_KEY'] = SECRET_KEY
+
+# Debug mode must never be on in production (it exposes the Werkzeug
+# debugger, which allows remote code execution). Control it with an env var
+# instead of hardcoding it.
+app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', 'false').strip().lower() == 'true'
+
+# Render (and most PaaS hosts) sit behind a reverse proxy that terminates
+# TLS. Without ProxyFix, Flask thinks every request is plain HTTP, so
+# url_for(..., _external=True) generates an http:// redirect_uri for Google
+# OAuth. That won't match the https:// Authorized redirect URI configured in
+# Google Cloud Console, and Google will reject the login with
+# "redirect_uri_mismatch". ProxyFix fixes this by trusting the
+# X-Forwarded-Proto / X-Forwarded-Host headers Render sets.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# Force Flask to build https:// URLs (belt-and-braces alongside ProxyFix)
+# when not running in local debug mode.
+app.config['PREFERRED_URL_SCHEME'] = 'http' if app.config['DEBUG'] else 'https'
+
+# Cookies should only travel over HTTPS in production, and SameSite=Lax lets
+# the Google OAuth redirect back to your site still carry the session cookie
+# that holds the "state" value (without it, the state check fails).
+app.config['SESSION_COOKIE_SECURE'] = not app.config['DEBUG']
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 # Hadawa da Database tare da wanke kowane sarari (space) ta atomatik
 database_url = os.environ.get('DATABASE_URL')
@@ -20,15 +68,41 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url if database_url else 'sqlit
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
+# Reject uploads over 200MB outright (adjust as needed) so a huge file can't
+# exhaust disk/memory before your own validation even runs.
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024
+
+ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'mov', 'webm', 'mkv', 'avi'}
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+
+def allowed_file(filename, allowed_extensions):
+    return (
+        '.' in filename
+        and filename.rsplit('.', 1)[1].lower() in allowed_extensions
+    )
+
+
+def unique_filename(filename):
+    """Prefix with a UUID so uploads from different users never collide or
+    overwrite each other, while keeping the sanitized original name."""
+    safe_name = secure_filename(filename)
+    ext = safe_name.rsplit('.', 1)[1].lower() if '.' in safe_name else ''
+    return f"{uuid.uuid4().hex}.{ext}" if ext else f"{uuid.uuid4().hex}"
+
+
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
 db = SQLAlchemy(app)
+csrf = CSRFProtect(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login_password'
 
+# ---------------------------------------------------------------------------
 # Saita OAuth na Google Login
+# ---------------------------------------------------------------------------
 oauth = OAuth(app)
 google_client_id = os.environ.get('GOOGLE_CLIENT_ID')
 google_client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
@@ -39,15 +113,19 @@ google_configured = False
 if google_client_id and google_client_secret:
     google_client_id = google_client_id.strip()
     google_client_secret = google_client_secret.strip()
-    
+
     google = oauth.register(
         name='google',
         client_id=google_client_id,
         client_secret=google_client_secret,
         server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-        client_kwargs={'scope': 'openid email profile'}
+        client_kwargs={'scope': 'openid email profile'},
     )
     google_configured = True
+else:
+    print('NOTE: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set. '
+          '"Continue with Google" will be hidden/disabled until both are '
+          'configured in your environment variables on Render.')
 
 # ---------------------------------------------------------------------------
 # DATABASE MODELS
@@ -89,8 +167,8 @@ class Like(db.Model):
 
 class Watchlist(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, nullable=False)
-    video_id = db.Column(db.Integer, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -124,6 +202,14 @@ def login_google():
     if not google_configured:
         flash('Google Login keys are not configured in Render Environment Variables!')
         return redirect(url_for('login_password'))
+    # This must build an https:// URL that EXACTLY matches an "Authorized
+    # redirect URI" entered in Google Cloud Console -> Credentials -> your
+    # OAuth Client -> Authorized redirect URIs, e.g.:
+    #   https://your-app.onrender.com/authorize/google
+    # If PREFERRED_URL_SCHEME/ProxyFix above aren't taking effect for some
+    # reason, this will come out as http:// and Google will reject the
+    # request with "Error 400: redirect_uri_mismatch" — check the URL this
+    # generates against your Google Console entry if that happens.
     redirect_uri = url_for('authorize_google', _external=True)
     return google.authorize_redirect(redirect_uri)
 
@@ -131,21 +217,54 @@ def login_google():
 def authorize_google():
     if not google_configured:
         return redirect(url_for('login_password'))
-    token = google.authorize_access_token()
+
+    try:
+        token = google.authorize_access_token()
+    except Exception as e:
+        # Most common causes on Render:
+        #  - SECRET_KEY changes between requests (multiple workers/dynos
+        #    without a shared, fixed SECRET_KEY env var) -> "state" mismatch
+        #  - Session cookie blocked because SESSION_COOKIE_SECURE=True but
+        #    the request came in as plain http (fixed by ProxyFix above)
+        app.logger.error(f'Google OAuth token exchange failed: {e}')
+        flash('Google sign-in failed (session/state mismatch). Please try again.')
+        return redirect(url_for('login_password'))
+
     user_info = token.get('userinfo')
-    if user_info:
-        email = user_info.get('email')
-        name = user_info.get('name') or user_info.get('given_name') or email.split('@')[0]
-        
-        user = User.query.filter_by(email=email).first()
-        if not user:
-            user = User(username=name, email=email, is_admin=False)
-            db.session.add(user)
-            db.session.commit()
-        
-        login_user(user)
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('login_password'))
+    if not user_info:
+        # Some providers/configs don't return userinfo inline; parse the ID
+        # token as a fallback instead of silently failing.
+        try:
+            user_info = google.parse_id_token(token, nonce=None)
+        except Exception as e:
+            app.logger.error(f'Google OAuth userinfo parsing failed: {e}')
+            user_info = None
+
+    if not user_info or not user_info.get('email'):
+        flash('Could not retrieve your Google account email. Please try again or use email/password.')
+        return redirect(url_for('login_password'))
+
+    email = user_info.get('email')
+    name = user_info.get('name') or user_info.get('given_name') or email.split('@')[0]
+
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        # Guard against a colliding username (e.g. two Google accounts
+        # sharing a display name) which would otherwise hit the unique
+        # constraint on User.username and raise a 500 error.
+        base_username = secure_filename(name) or email.split('@')[0]
+        username = base_username
+        suffix = 1
+        while User.query.filter_by(username=username).first():
+            suffix += 1
+            username = f"{base_username}{suffix}"
+
+        user = User(username=username, email=email, is_admin=False)
+        db.session.add(user)
+        db.session.commit()
+
+    login_user(user)
+    return redirect(url_for('dashboard'))
 
 @app.route('/register', methods=['GET', 'POST'])
 @app.route('/signup', methods=['GET', 'POST'])
@@ -198,13 +317,19 @@ def upload():
         if not title:
             flash('Title is required!')
             return redirect(request.url)
+        if not allowed_file(video_file.filename, ALLOWED_VIDEO_EXTENSIONS):
+            flash('Unsupported video format. Allowed: ' + ', '.join(sorted(ALLOWED_VIDEO_EXTENSIONS)))
+            return redirect(request.url)
+        if thumb_file and thumb_file.filename and not allowed_file(thumb_file.filename, ALLOWED_IMAGE_EXTENSIONS):
+            flash('Unsupported thumbnail format. Allowed: ' + ', '.join(sorted(ALLOWED_IMAGE_EXTENSIONS)))
+            return redirect(request.url)
 
-        v_filename = secure_filename(video_file.filename)
+        v_filename = unique_filename(video_file.filename)
         video_file.save(os.path.join(app.config['UPLOAD_FOLDER'], v_filename))
 
         t_filename = "default_thumb.jpg"
         if thumb_file and thumb_file.filename:
-            t_filename = secure_filename(thumb_file.filename)
+            t_filename = unique_filename(thumb_file.filename)
             thumb_file.save(os.path.join(app.config['UPLOAD_FOLDER'], t_filename))
 
         new_video = Video(title=title, description=description, category=category, filename=v_filename, thumbnail=t_filename, user_id=current_user.id)
@@ -263,7 +388,10 @@ def update_profile():
     if bio:
         current_user.bio = bio
     if profile_pic and profile_pic.filename:
-        filename = secure_filename(profile_pic.filename)
+        if not allowed_file(profile_pic.filename, ALLOWED_IMAGE_EXTENSIONS):
+            flash('Unsupported image format. Allowed: ' + ', '.join(sorted(ALLOWED_IMAGE_EXTENSIONS)))
+            return redirect(url_for('dashboard', tab='profile'))
+        filename = unique_filename(profile_pic.filename)
         profile_pic.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         current_user.profile_pic = filename
     db.session.commit()
@@ -297,4 +425,8 @@ def logout():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    # debug is now driven by the FLASK_DEBUG env var (see config above) and
+    # defaults to False. On Render you should be running this via a
+    # production WSGI server (e.g. gunicorn app:app) rather than this
+    # __main__ block anyway.
+    app.run(debug=app.config['DEBUG'], host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
