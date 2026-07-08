@@ -192,8 +192,8 @@
                 <input type="checkbox" id="legalCheck" class="legal-checkbox" onchange="validateGateway()">
                 <label for="legalCheck" class="legal-text">
                     I have read and completely agree to the 
-                    <a href="#" target="_blank">Privacy Policy</a> and 
-                    <a href="#" target="_blank">Terms of Service</a>.
+                    <a href="{{ url_for('privacy') }}" target="_blank">Privacy Policy</a> and 
+                    <a href="{{ url_for('terms') }}" target="_blank">Terms of Service</a>.
                 </label>
             </div>
 
