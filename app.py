@@ -1,7 +1,8 @@
 import os
 import uuid
 import secrets
-from flask import Flask, render_template, request, redirect, url_for, flash
+from datetime import datetime, timezone
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_wtf import CSRFProtect
@@ -159,6 +160,10 @@ class Comment(db.Model):
     content = db.Column(db.Text, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
+    # video.html calls comment.created_at.strftime(...) — this column was
+    # missing entirely, which crashed the video page with a 500 error as
+    # soon as a video had at least one comment.
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Like(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -187,6 +192,14 @@ def load_user(user_id):
 # ---------------------------------------------------------------------------
 # ROUTES
 # ---------------------------------------------------------------------------
+@app.route('/uploads/<path:filename>')
+def serve_upload(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/thumbnails/<path:filename>')
+def serve_thumbnail(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 @app.route('/')
 def welcome():
     if current_user.is_authenticated:
@@ -316,7 +329,7 @@ def upload():
         description = request.form.get('description')
         category = request.form.get('category')
         video_file = request.files.get('video_file')
-        thumb_file = request.files.get('thumbnail')
+        thumb_file = request.files.get('thumbnail_file')
 
         if not video_file or video_file.filename == '':
             flash('Please select a video file!')
@@ -350,8 +363,8 @@ def upload():
 @login_required
 def watch_video(video_id):
     video = Video.query.get_or_404(video_id)
-    if request.method == 'POST' and 'comment' in request.form:
-        comment_content = request.form.get('comment')
+    if request.method == 'POST' and 'comment_text' in request.form:
+        comment_content = request.form.get('comment_text')
         if comment_content:
             new_comment = Comment(content=comment_content, user_id=current_user.id, video_id=video.id)
             db.session.add(new_comment)
@@ -363,6 +376,18 @@ def watch_video(video_id):
     has_liked = Like.query.filter_by(user_id=current_user.id, video_id=video.id).first() is not None
     likes_count = Like.query.filter_by(video_id=video.id).count()
     return render_template('video.html', video=video, recommended=recommended, has_liked=has_liked, likes=likes_count)
+
+@app.route('/download/<int:video_id>')
+@login_required
+def download_video(video_id):
+    video = Video.query.get_or_404(video_id)
+    video.downloads += 1
+    db.session.commit()
+    return send_from_directory(
+        app.config['UPLOAD_FOLDER'],
+        video.filename,
+        as_attachment=True,
+    )
 
 @app.route('/like/<int:video_id>')
 @login_required
@@ -414,6 +439,51 @@ def admin_panel():
     users = User.query.all()
     videos = Video.query.all()
     return render_template('admin.html', users=users, videos=videos)
+
+@app.route('/admin/delete_user/<int:user_id>')
+@login_required
+def admin_delete_user(user_id):
+    if not current_user.is_admin:
+        flash('Access denied!')
+        return redirect(url_for('dashboard'))
+
+    target = User.query.get_or_404(user_id)
+    if target.is_admin:
+        flash("Admin accounts can't be deleted.")
+        return redirect(url_for('admin_panel'))
+
+    # Clean up everything that references this user before deleting them,
+    # since the foreign keys have no ON DELETE CASCADE configured.
+    for video in Video.query.filter_by(user_id=target.id).all():
+        Comment.query.filter_by(video_id=video.id).delete()
+        Like.query.filter_by(video_id=video.id).delete()
+        Watchlist.query.filter_by(video_id=video.id).delete()
+        db.session.delete(video)
+
+    Comment.query.filter_by(user_id=target.id).delete()
+    Like.query.filter_by(user_id=target.id).delete()
+    Watchlist.query.filter_by(user_id=target.id).delete()
+
+    db.session.delete(target)
+    db.session.commit()
+    flash(f'User "{target.username}" was deleted.')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/delete_video/<int:video_id>')
+@login_required
+def admin_delete_video(video_id):
+    if not current_user.is_admin:
+        flash('Access denied!')
+        return redirect(url_for('dashboard'))
+
+    video = Video.query.get_or_404(video_id)
+    Comment.query.filter_by(video_id=video.id).delete()
+    Like.query.filter_by(video_id=video.id).delete()
+    Watchlist.query.filter_by(video_id=video.id).delete()
+    db.session.delete(video)
+    db.session.commit()
+    flash(f'Video "{video.title}" was deleted.')
+    return redirect(url_for('admin_panel'))
 
 @app.route('/privacy')
 def privacy():
