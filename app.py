@@ -168,6 +168,13 @@ class Video(db.Model):
     category = db.Column(db.String(100), nullable=False)
     views = db.Column(db.Integer, default=0)
     downloads = db.Column(db.Integer, default=0)
+    # upload.html has "Publish as Short TV Video" / "Lock as Premium
+    # Exclusive" checkboxes, and dashboard.html reads video.is_short /
+    # video.is_locked to badge tiles and to filter the ShortTV/Premium
+    # tabs — these columns were missing entirely, so every tab showed the
+    # exact same unfiltered video list.
+    is_short = db.Column(db.Boolean, default=False, nullable=False)
+    is_locked = db.Column(db.Boolean, default=False, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     comments = db.relationship('Comment', backref='video', lazy=True)
     likes = db.relationship('Like', backref='video', lazy=True)
@@ -191,6 +198,16 @@ class Watchlist(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
+    # watchlist.html expects item.video.title/.thumbnail/.category/.id
+    video = db.relationship('Video')
+
+class WatchHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
+    watched_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    # history.html expects record.video.title/.id and record.watched_at
+    video = db.relationship('Video')
 
 # Create tables at import time, not just under `if __name__ == '__main__'`.
 # On Render, gunicorn imports this module directly (`gunicorn app:app`) and
@@ -312,9 +329,13 @@ def authorize_google():
 @app.route('/signup', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form.get('username')
+        username = request.form.get('name')
         email = request.form.get('email')
         password = request.form.get('password')
+
+        if not username or not email or not password:
+            flash('Please fill in your name, email, and password.')
+            return redirect(request.url)
 
         user_exists = User.query.filter((User.email == email) | (User.username == username)).first()
         if user_exists:
@@ -334,11 +355,28 @@ def register():
 @login_required
 def dashboard():
     tab = request.args.get('tab', 'home')
-    videos = Video.query.all()
+    search = request.args.get('search', '').strip()
+    category = request.args.get('category', 'All')
+
+    query = Video.query
+    if tab == 'shorts':
+        query = query.filter_by(is_short=True)
+    elif tab == 'premium':
+        query = query.filter_by(is_locked=True)
+    elif tab == 'home':
+        query = query.filter_by(is_short=False, is_locked=False)
+
+    if category and category != 'All':
+        query = query.filter_by(category=category)
+    if search:
+        query = query.filter(Video.title.ilike(f'%{search}%'))
+
+    videos = query.order_by(Video.id.desc()).all()
+
     watchlist_entries = Watchlist.query.filter_by(user_id=current_user.id).all()
     watchlist_video_ids = [w.video_id for w in watchlist_entries]
     watchlist_items = Video.query.filter(Video.id.in_(watchlist_video_ids)).all() if watchlist_video_ids else []
-    return render_template('dashboard.html', active_tab=tab, videos=videos, watchlist_items=watchlist_items)
+    return render_template('dashboard.html', active_tab=tab, videos=videos, watchlist_items=watchlist_items, selected_category=category)
 
 @app.route('/upload', methods=['GET', 'POST'])
 @login_required
@@ -371,7 +409,10 @@ def upload():
             t_filename = unique_filename(thumb_file.filename)
             thumb_file.save(os.path.join(app.config['UPLOAD_FOLDER'], t_filename))
 
-        new_video = Video(title=title, description=description, category=category, filename=v_filename, thumbnail=t_filename, user_id=current_user.id)
+        is_short = request.form.get('is_short') == 'true'
+        is_locked = request.form.get('is_premium') == 'true'
+
+        new_video = Video(title=title, description=description, category=category, filename=v_filename, thumbnail=t_filename, is_short=is_short, is_locked=is_locked, user_id=current_user.id)
         db.session.add(new_video)
         db.session.commit()
         flash('Video uploaded successfully!')
@@ -390,6 +431,14 @@ def watch_video(video_id):
             db.session.commit()
 
     video.views += 1
+
+    if request.method == 'GET':
+        history_entry = WatchHistory.query.filter_by(user_id=current_user.id, video_id=video.id).first()
+        if history_entry:
+            history_entry.watched_at = datetime.now(timezone.utc)
+        else:
+            db.session.add(WatchHistory(user_id=current_user.id, video_id=video.id))
+
     db.session.commit()
     recommended = Video.query.filter(Video.category == video.category, Video.id != video.id).limit(4).all()
     has_liked = Like.query.filter_by(user_id=current_user.id, video_id=video.id).first() is not None
@@ -430,6 +479,18 @@ def add_to_watchlist(video_id):
         db.session.commit()
         flash('Added to watchlist!')
     return redirect(url_for('dashboard'))
+
+@app.route('/watchlist')
+@login_required
+def watchlist_page():
+    items = Watchlist.query.filter_by(user_id=current_user.id).order_by(Watchlist.id.desc()).all()
+    return render_template('watchlist.html', items=items)
+
+@app.route('/history')
+@login_required
+def history_page():
+    records = WatchHistory.query.filter_by(user_id=current_user.id).order_by(WatchHistory.watched_at.desc()).all()
+    return render_template('history.html', records=records)
 
 @app.route('/profile', methods=['POST'])
 @login_required
